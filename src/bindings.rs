@@ -6,6 +6,10 @@ sol! {
             tuple(address, bytes, bool)[] memory calls,
             tuple(uint256, uint256, tuple(uint8, uint8, uint8, uint16), tuple(uint256[8],)) memory payload
         ) external;
+        function pbhMulticallCall(
+            tuple(address, bytes, bool)[] memory calls,
+            tuple(uint256, uint256, tuple(uint8, uint8, uint8, uint16), tuple(uint256[8],)) memory payload
+        ) external;
         function numPbhPerMonth() external view returns (uint16);
         function nullifierHashes(uint256) external view returns (bool);
     }
