@@ -1,13 +1,17 @@
 use alloy_consensus::Transaction;
-use alloy_primitives::{Address, Bytes, U256};
+use alloy_network::{Network, eip2718::Encodable2718};
+use alloy_primitives::{Address, Bytes, TxHash, U256};
+use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types_eth::TransactionInput;
 use alloy_signer_local::PrivateKeySigner;
 use clap::Parser;
 use eyre::Result;
+use reqwest::Url;
 use serde::Deserialize;
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 mod transaction;
 mod world_id;
@@ -147,12 +151,16 @@ async fn main() -> Result<()> {
     // Determine which RPC address to use (command line takes precedence over config)
     let rpc_address = args.provider_uri.or(Some(config.rpc_address.clone()));
     
-    // Log the RPC address if provided
-    if let Some(rpc_uri) = rpc_address.clone() {
+    // Create a provider with the RPC address if provided
+    let provider = if let Some(rpc_uri) = rpc_address.clone() {
         println!("Using RPC address: {}", rpc_uri);
+        let provider = ProviderBuilder::new()
+            .on_http(rpc_uri.parse::<Url>()?);
+        Some(Arc::new(provider))
     } else {
         println!("No RPC address provided, transaction will not be sent");
-    }
+        None
+    };
     
     // Create and send the transaction
     let tx = if args.use_pbh {
@@ -177,9 +185,16 @@ async fn main() -> Result<()> {
             .await?
     };
     
-    // Print the transaction details
-    println!("Transaction built:");
-    println!("  Transaction: {:?}", tx);
+    // Send the transaction using the provider if available
+    if let Some(provider) = provider {
+        // Send the transaction using the provider
+        let pending_tx = provider.send_raw_transaction(&tx.encoded_2718()).await?;
+        println!("Transaction sent: {:?}", pending_tx.tx_hash());
+    } else {
+        // Just print the transaction details if no provider is available
+        println!("Transaction built but not sent (no provider available):");
+        println!("  Transaction: {:?}", tx);
+    }
     
     Ok(())
 }
