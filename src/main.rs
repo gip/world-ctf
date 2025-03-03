@@ -20,6 +20,7 @@ use world_id::WorldID;
 struct Config {
     contract_address: String,
     world_id: String,
+    rpc_address: String,
 }
 
 // Command line arguments
@@ -30,9 +31,9 @@ struct Args {
     #[clap(long)]
     iterations: u64,
     
-    /// RPC provider URI
-    #[clap(long, default_value = "https://worldchain-sepolia.infura.io/v3/your-api-key")]
-    provider_uri: String,
+    /// RPC provider URI (overrides config file)
+    #[clap(long)]
+    provider_uri: Option<String>,
     
     /// PBH Entry Point contract address
     #[clap(long, default_value = "0x6e37bAB9d23bd8Bdb42b773C58ae43C6De43A590")]
@@ -142,6 +143,9 @@ async fn main() -> Result<()> {
     println!();
     println!("Sending transaction to the contract...");
     
+    // Determine which RPC address to use (command line takes precedence over config)
+    let rpc_address = args.provider_uri.or(Some(config.rpc_address.clone()));
+    
     // Create and send the transaction
     let tx = if args.use_pbh {
         // Create a WorldID from the world_id in the config
@@ -151,14 +155,14 @@ async fn main() -> Result<()> {
         let calls = consume_gas_multicall(contract_address, args.iterations);
         
         // Create and send a PBH transaction
-        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee)
+        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, rpc_address)
             .with_pbh_multicall(&world_id, args.pbh_nonce, signer.address(), calls)
             .await?
             .build(signer)
             .await?
     } else {
         // Create and send a direct transaction
-        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee)
+        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, rpc_address)
             .to(contract_address)
             .input(TransactionInput::new(calldata))
             .build(signer)

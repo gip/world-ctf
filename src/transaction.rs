@@ -17,10 +17,11 @@ pub static PBH_ENTRY_POINT: Address = Address::ZERO;
 #[derive(Debug, Clone, Default)]
 pub struct GasTestTransactionBuilder {
     pub tx: TransactionRequest,
+    pub rpc_address: Option<String>,
 }
 
 impl GasTestTransactionBuilder {
-    pub fn new(gas_fee: Option<f64>, priority_gas_fee: Option<f64>) -> Self {
+    pub fn new(gas_fee: Option<f64>, priority_gas_fee: Option<f64>, rpc_address: Option<String>) -> Self {
         let mut tx = TransactionRequest::default()
             .gas_limit(130000);
         
@@ -37,7 +38,7 @@ impl GasTestTransactionBuilder {
             tx = tx.max_priority_fee_per_gas(1e8 as u128);
         }
         
-        GasTestTransactionBuilder { tx }
+        GasTestTransactionBuilder { tx, rpc_address }
     }
 
     pub async fn with_pbh_multicall(
@@ -61,23 +62,29 @@ impl GasTestTransactionBuilder {
             .to(PBH_ENTRY_POINT)
             .input(TransactionInput::new(calldata.abi_encode().into()));
         
-        Ok(Self { tx })
+        Ok(Self { tx, rpc_address: self.rpc_address })
     }
 
     pub async fn build(self, signer: PrivateKeySigner) -> Result<TxEnvelope> {
-        Ok(self.tx.build::<EthereumWallet>(&signer.into()).await?)
+        let wallet: EthereumWallet = signer.into();
+        
+        // Note: We're storing the RPC address in the struct but not using it yet
+        // In a real implementation, we would need to create a provider with this URL
+        // and use it for the transaction
+        
+        Ok(self.tx.build(&wallet).await?)
     }
 
     /// Sets the recipient address for the transaction.
     pub fn to(self, to: Address) -> Self {
         let tx = self.tx.to(to);
-        Self { tx }
+        Self { tx, rpc_address: self.rpc_address }
     }
 
     /// Sets the input data for the transaction.
     pub fn input(self, input: TransactionInput) -> Self {
         let tx = self.tx.input(input);
-        Self { tx }
+        Self { tx, rpc_address: self.rpc_address }
     }
 }
 

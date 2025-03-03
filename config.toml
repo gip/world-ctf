@@ -1,3 +1,4 @@
 # Configuration for Gas Test Application
 contract_address = "0x1234567890123456789012345678901234567890"
 world_id = "your-world-id-here"
+rpc_address = "https://worldchain-sepolia.infura.io/v3/your-api-key"
