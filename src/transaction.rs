@@ -34,7 +34,7 @@ impl GasTestTransactionBuilder {
     pub fn new(gas_fee: Option<f64>, priority_gas_fee: Option<f64>, _rpc_address: Option<String>) -> Self {
         let mut tx = TransactionRequest::default()
             .gas_limit(130000);
-        
+        tx.set_chain_id(4801);
         // Set gas fees if provided
         if let Some(gas_fee) = gas_fee {
             tx = tx.max_fee_per_gas((gas_fee * 1e9) as u128);
