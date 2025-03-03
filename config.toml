@@ -1,4 +1,8 @@
 # Configuration for Gas Test Application
-contract_address = "0x1234567890123456789012345678901234567890"
-world_id = "your-world-id-here"
-rpc_address = "https://worldchain-sepolia.infura.io/v3/your-api-key"
+contract_address = "0xbA9FfCB4cc50eE2EC2F89740f5d6841cC8A74030"
+
+world_id = "CrhzFyIBMUWsFbK/4i0PxGEUGb9b7xG9c87NyzyYaSwFqqUPkmoWGEorP7iG7XV7ipvP4b6JC7ZTZhif7P+i0g=="
+rpc_address = "https://worldchain-sepolia.g.alchemy.com/v2/2qZalLCM_WGzzhvUSXlOV_tvlTxRHg4E"
+
+# world_id = "your-world-id-here"
+# rpc_address = "https://worldchain-sepolia.infura.io/v3/your-api-key"

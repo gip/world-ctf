@@ -12,6 +12,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use std::str::FromStr;
+use tiny_keccak::{Keccak, Hasher};
 
 mod transaction;
 mod world_id;
@@ -65,30 +66,36 @@ struct Args {
     pbh_nonce: u16,
 }
 
-// Function to create calldata for the consumeGas function
-fn consume_gas_calldata(address: Address, iterations: U256) -> Bytes {
-    // Function selector for consumeGas(address,uint256)
-    // keccak256("consumeGas(address,uint256)")[0..4]
-    let selector = [0x41, 0x4c, 0xf8, 0x5d];
+
+pub fn consume_gas_calldata(address: &Address, iterations: U256) -> Bytes {
+    // Calculate function selector for consumeGas(address,uint256)
+    let mut keccak = Keccak::v256();
+    let mut hash = [0u8; 32];
+    keccak.update(b"consumeGas(address,uint256)");
+    keccak.finalize(&mut hash);
     
-    // Encode the parameters
-    let mut calldata = selector.to_vec();
+    // Take first 4 bytes of the hash as function selector
+    let function_selector = &hash[0..4];
     
-    // Encode address (pad to 32 bytes)
-    let mut address_bytes = vec![0u8; 12];
-    address_bytes.extend_from_slice(address.as_slice());
+    // Create buffer for the calldata
+    let mut calldata = Vec::with_capacity(4 + 32 + 32); // 4 bytes for selector + 32 bytes for address + 32 bytes for iterations
+    
+    // Add function selector
+    calldata.extend_from_slice(function_selector);
+    
+    // Add address parameter (padded to 32 bytes)
+    let mut address_bytes = [0u8; 32];
+    address_bytes[12..32].copy_from_slice(address.as_slice());
     calldata.extend_from_slice(&address_bytes);
     
-    // Encode iterations
+    // Add iterations parameter (padded to 32 bytes)
     let mut iterations_bytes = [0u8; 32];
-    let iterations_vec = iterations.to_be_bytes_vec();
-    for (i, b) in iterations_vec.iter().rev().enumerate() {
-        iterations_bytes[32 - iterations_vec.len() + i] = *b;
-    }
+    iterations_bytes.copy_from_slice(&iterations.to_be_bytes::<32>());
     calldata.extend_from_slice(&iterations_bytes);
     
-    calldata.into()
+    calldata.into() // Convert Vec<u8> to Bytes
 }
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -120,7 +127,7 @@ async fn main() -> Result<()> {
     
     // Create calldata for the consumeGas function
     let iterations = U256::from(args.iterations);
-    let calldata = consume_gas_calldata(contract_address, iterations);
+    let calldata = consume_gas_calldata(&contract_address, iterations);
     
     println!("Gas Test Application");
     println!("-------------------");
