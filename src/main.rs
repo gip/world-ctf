@@ -1,10 +1,15 @@
 use alloy_primitives::{Address, Bytes, U256};
+use alloy_rpc_types_eth::TransactionInput;
+use alloy_signer_local::PrivateKeySigner;
 use clap::Parser;
 use eyre::Result;
 use serde::Deserialize;
 use std::env;
 use std::fs;
 use std::path::Path;
+
+mod transaction;
+use transaction::GasTestTransactionBuilder;
 
 // Configuration from TOML file
 #[derive(Deserialize, Debug)]
@@ -88,12 +93,16 @@ async fn main() -> Result<()> {
     let private_key = env::var("PRIVATE_KEY")
         .map_err(|_| eyre::eyre!("PRIVATE_KEY environment variable not set"))?;
     
+    // Parse the private key
+    let signer = private_key.parse::<PrivateKeySigner>()?;
+    
     // Convert string addresses to Address type
     let contract_address = config.contract_address.parse::<Address>()?;
     let pbh_entry_point = args.pbh_entry_point.parse::<Address>()?;
     
     // Create calldata for the consumeGas function
     let iterations = U256::from(args.iterations);
+    let calldata = consume_gas_calldata(contract_address, iterations);
     
     println!("Gas Test Application");
     println!("-------------------");
@@ -111,11 +120,19 @@ async fn main() -> Result<()> {
     }
     
     println!();
-    println!("In a real implementation, this would:");
-    println!("1. Send a direct transaction to the contract");
-    println!("2. Send a PBH transaction through the PBH Entry Point");
+    println!("Sending transaction to the contract...");
+    
+    // Create and send the transaction
+    let tx = GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee)
+        .to(contract_address)
+        .input(TransactionInput::new(calldata))
+        .build(signer)
+        .await?;
+    
+    println!("Transaction sent: {:?}", tx);
     println!();
-    println!("For now, this is a placeholder that successfully builds.");
+    println!("In a real implementation, this would also:");
+    println!("1. Send a PBH transaction through the PBH Entry Point");
     
     Ok(())
 }
