@@ -1,6 +1,6 @@
 use alloy_consensus::TxEnvelope;
 use alloy_network::{EthereumWallet, TransactionBuilder};
-use alloy_primitives::{Address, Bytes};
+use alloy_primitives::{Address, Bytes, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types_eth::{TransactionInput, TransactionRequest};
 use alloy_signer_local::PrivateKeySigner;
@@ -79,25 +79,22 @@ impl GasTestTransactionBuilder {
         calldata_bytes.extend_from_slice(&encoded_calls);
         
         // Extract the payload components and encode them manually
-        use alloy_primitives::U256;
-        
         // Create a tuple with the payload components in the expected format
         // (root, nullifier_hash, external_nullifier, proof)
         // Convert Field to U256 using the string representation
         let root = U256::from_str_radix(&pbh_payload.root.to_string(), 10).unwrap_or(U256::ZERO);
         let nullifier_hash = U256::from_str_radix(&pbh_payload.nullifier_hash.to_string(), 10).unwrap_or(U256::ZERO);
         
-        // For simplicity, create hardcoded values for the external nullifier components
-        // In a real implementation, we would extract these from the external_nullifier
+        // Extract the external nullifier components
+        let date_marker = pbh_payload.external_nullifier.date_marker();
+        // Access fields directly instead of using methods
         // Use u16 instead of u8 since u8 doesn't implement SolValue
-        let year: u16 = 24; // 2024
-        let month: u16 = 3; // March
-        let day: u16 = 3; // 3rd
-        
-        // Use the provided pbh_nonce
+        let year: u16 = (date_marker.year % 100) as u16; // Convert to 2-digit year
+        let month: u16 = date_marker.month as u16;
+        let day: u16 = 1; // Default to 1 since DateMarker doesn't store the day
         let nonce = pbh_nonce;
         
-        // Create a dummy proof array
+        // Create a dummy proof array for testing
         // In a real implementation, we would extract this from the proof
         let proof_flat = [U256::ZERO; 8];
         
