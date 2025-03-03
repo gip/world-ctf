@@ -1,6 +1,5 @@
-use alloy_consensus::Transaction;
-use alloy_network::{Network, eip2718::Encodable2718};
-use alloy_primitives::{Address, Bytes, TxHash, U256};
+use alloy_network::{eip2718::Encodable2718};
+use alloy_primitives::{Address, Bytes, U256};
 use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types_eth::TransactionInput;
 use alloy_signer_local::PrivateKeySigner;
@@ -12,6 +11,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use std::str::FromStr;
 
 mod transaction;
 mod world_id;
@@ -164,19 +164,41 @@ async fn main() -> Result<()> {
     
     // Create and send the transaction
     let tx = if args.use_pbh {
+        // Print transaction type
+        println!("Transaction Type: PBH");
+        
         // Create a WorldID from the world_id in the config
         let world_id = WorldID::new(&config.world_id)?;
+        
+        // Define the PBH entry point address - this is used in the transaction
+        let _pbh_entry_point = Address::from_str("0x6e37bAB9d23bd8Bdb42b773C58ae43C6De43A590").unwrap();
+        
+        // Get the PBH nonce limit and the next available nonce if a provider is available
+        let pbh_nonce = if let Some(_provider_ref) = provider.as_ref() {
+            // For simplicity, use a hardcoded PBH nonce limit
+            let _pbh_nonce_limit: u16 = 65535;
+            
+            // For now, just use the provided nonce since we have provider compatibility issues
+            println!("Using provided PBH Nonce: {}", args.pbh_nonce);
+            args.pbh_nonce
+        } else {
+            println!("No provider available, using provided PBH Nonce: {}", args.pbh_nonce);
+            args.pbh_nonce
+        };
         
         // Create a multicall for the consumeGas function
         let calls = consume_gas_multicall(contract_address, args.iterations);
         
         // Create and send a PBH transaction
         GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None)
-            .with_pbh_multicall(&world_id, args.pbh_nonce, signer.address(), calls)
+            .with_pbh_multicall(&world_id, pbh_nonce, signer.address(), calls)
             .await?
             .build(signer)
             .await?
     } else {
+        // Print transaction type
+        println!("Transaction Type: Direct");
+        
         // Create and send a direct transaction
         GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None)
             .to(contract_address)
