@@ -1,3 +1,4 @@
+use alloy_consensus::Transaction;
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_rpc_types_eth::TransactionInput;
 use alloy_signer_local::PrivateKeySigner;
@@ -146,6 +147,13 @@ async fn main() -> Result<()> {
     // Determine which RPC address to use (command line takes precedence over config)
     let rpc_address = args.provider_uri.or(Some(config.rpc_address.clone()));
     
+    // Log the RPC address if provided
+    if let Some(rpc_uri) = rpc_address.clone() {
+        println!("Using RPC address: {}", rpc_uri);
+    } else {
+        println!("No RPC address provided, transaction will not be sent");
+    }
+    
     // Create and send the transaction
     let tx = if args.use_pbh {
         // Create a WorldID from the world_id in the config
@@ -169,7 +177,9 @@ async fn main() -> Result<()> {
             .await?
     };
     
-    println!("Transaction sent: {:?}", tx);
+    // Print the transaction details
+    println!("Transaction built:");
+    println!("  Transaction: {:?}", tx);
     
     Ok(())
 }
