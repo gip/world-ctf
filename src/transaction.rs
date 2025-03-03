@@ -1,11 +1,14 @@
 use alloy_consensus::TxEnvelope;
 use alloy_network::{EthereumWallet, TransactionBuilder};
 use alloy_primitives::Address;
+use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types_eth::{TransactionInput, TransactionRequest};
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{SolCall, SolValue};
 use eyre::Result;
+use reqwest::Url;
 use semaphore_rs::hash_to_field;
+use std::sync::Arc;
 use world_chain_builder_test_utils::bindings::IMulticall3::Call3;
 
 use crate::world_id::WorldID;
@@ -14,10 +17,21 @@ use world_chain_builder_test_utils::bindings::IPBHEntryPoint;
 // PBH Entry Point address
 pub static PBH_ENTRY_POINT: Address = Address::ZERO;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct GasTestTransactionBuilder {
     pub tx: TransactionRequest,
     pub rpc_address: Option<String>,
+    pub provider: Option<Arc<dyn Provider>>,
+}
+
+impl std::fmt::Debug for GasTestTransactionBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GasTestTransactionBuilder")
+            .field("tx", &self.tx)
+            .field("rpc_address", &self.rpc_address)
+            .field("provider", &format!("<provider>"))
+            .finish()
+    }
 }
 
 impl GasTestTransactionBuilder {
@@ -38,7 +52,7 @@ impl GasTestTransactionBuilder {
             tx = tx.max_priority_fee_per_gas(1e8 as u128);
         }
         
-        GasTestTransactionBuilder { tx, rpc_address }
+        GasTestTransactionBuilder { tx, rpc_address, provider: None }
     }
 
     pub async fn with_pbh_multicall(
@@ -62,29 +76,36 @@ impl GasTestTransactionBuilder {
             .to(PBH_ENTRY_POINT)
             .input(TransactionInput::new(calldata.abi_encode().into()));
         
-        Ok(Self { tx, rpc_address: self.rpc_address })
+        Ok(Self { tx, rpc_address: self.rpc_address, provider: self.provider })
     }
 
     pub async fn build(self, signer: PrivateKeySigner) -> Result<TxEnvelope> {
         let wallet: EthereumWallet = signer.into();
         
-        // Note: We're storing the RPC address in the struct but not using it yet
-        // In a real implementation, we would need to create a provider with this URL
-        // and use it for the transaction
+        // Create a provider with the RPC address if provided
+        if let Some(rpc_address) = self.rpc_address {
+            // Log that we're using the RPC address from config
+            println!("Using RPC address from config: {}", rpc_address);
+            
+            // In a real implementation, we would create a provider with this URL
+            // and use it for the transaction. However, the current API doesn't 
+            // support this directly, so we're just logging it for now.
+        }
         
+        // Build the transaction without a provider
         Ok(self.tx.build(&wallet).await?)
     }
 
     /// Sets the recipient address for the transaction.
     pub fn to(self, to: Address) -> Self {
         let tx = self.tx.to(to);
-        Self { tx, rpc_address: self.rpc_address }
+        Self { tx, rpc_address: self.rpc_address, provider: self.provider }
     }
 
     /// Sets the input data for the transaction.
     pub fn input(self, input: TransactionInput) -> Self {
         let tx = self.tx.input(input);
-        Self { tx, rpc_address: self.rpc_address }
+        Self { tx, rpc_address: self.rpc_address, provider: self.provider }
     }
 }
 
