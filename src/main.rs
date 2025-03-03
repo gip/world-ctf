@@ -189,8 +189,23 @@ async fn main() -> Result<()> {
         // Create a multicall for the consumeGas function
         let calls = consume_gas_multicall(contract_address, args.iterations);
         
+        // Create a transaction builder
+        let mut tx_builder = GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None);
+        
+        // Get the account nonce if a provider is available
+        if let Some(provider_ref) = provider.as_ref() {
+            // Get the current nonce for the signer's address
+            let account_nonce = provider_ref.get_transaction_count(signer.address()).await?;
+            println!("Using account nonce: {}", account_nonce);
+            
+            // Set the nonce on the transaction builder
+            tx_builder = tx_builder.nonce(account_nonce);
+        } else {
+            println!("No provider available, using default nonce");
+        }
+        
         // Create and send a PBH transaction
-        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None)
+        tx_builder
             .with_pbh_multicall(&world_id, pbh_nonce, signer.address(), calls)
             .await?
             .build(signer)
@@ -199,8 +214,23 @@ async fn main() -> Result<()> {
         // Print transaction type
         println!("Transaction Type: Direct");
         
+        // Create a transaction builder
+        let mut tx_builder = GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None);
+        
+        // Get the account nonce if a provider is available
+        if let Some(provider_ref) = provider.as_ref() {
+            // Get the current nonce for the signer's address
+            let account_nonce = provider_ref.get_transaction_count(signer.address()).await?;
+            println!("Using account nonce: {}", account_nonce);
+            
+            // Set the nonce on the transaction builder
+            tx_builder = tx_builder.nonce(account_nonce);
+        } else {
+            println!("No provider available, using default nonce");
+        }
+        
         // Create and send a direct transaction
-        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None)
+        tx_builder
             .to(contract_address)
             .input(TransactionInput::new(calldata))
             .build(signer)
