@@ -1,26 +1,25 @@
 use alloy_primitives::{Address, Bytes, U256};
 use clap::Parser;
 use eyre::Result;
+use serde::Deserialize;
+use std::env;
+use std::fs;
+use std::path::Path;
+
+// Configuration from TOML file
+#[derive(Deserialize, Debug)]
+struct Config {
+    contract_address: String,
+    world_id: String,
+}
 
 // Command line arguments
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct Args {
-    /// Contract address
-    #[clap(long)]
-    contract_address: String,
-    
     /// Number of iterations for gas consumption
     #[clap(long)]
     iterations: u64,
-    
-    /// Private key for signing transactions
-    #[clap(long)]
-    private_key: String,
-    
-    /// World ID semaphore secret for PBH transactions
-    #[clap(long)]
-    world_id: String,
     
     /// RPC provider URI
     #[clap(long, default_value = "https://worldchain-sepolia.infura.io/v3/your-api-key")]
@@ -29,6 +28,18 @@ struct Args {
     /// PBH Entry Point contract address
     #[clap(long, default_value = "0x6e37bAB9d23bd8Bdb42b773C58ae43C6De43A590")]
     pbh_entry_point: String,
+    
+    /// Gas fee in Gwei
+    #[clap(long)]
+    gas_fee: Option<f64>,
+    
+    /// Priority gas fee in Gwei
+    #[clap(long)]
+    priority_gas_fee: Option<f64>,
+    
+    /// Path to configuration file
+    #[clap(long, default_value = "config.toml")]
+    config_file: String,
 }
 
 // Function to create calldata for the consumeGas function
@@ -64,8 +75,21 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let args = Args::parse();
     
+    // Read configuration from TOML file
+    let config_path = Path::new(&args.config_file);
+    if !config_path.exists() {
+        return Err(eyre::eyre!("Configuration file not found: {}", args.config_file));
+    }
+    
+    let config_content = fs::read_to_string(config_path)?;
+    let config: Config = toml::from_str(&config_content)?;
+    
+    // Get private key from environment variable
+    let private_key = env::var("PRIVATE_KEY")
+        .map_err(|_| eyre::eyre!("PRIVATE_KEY environment variable not set"))?;
+    
     // Convert string addresses to Address type
-    let contract_address = args.contract_address.parse::<Address>()?;
+    let contract_address = config.contract_address.parse::<Address>()?;
     let pbh_entry_point = args.pbh_entry_point.parse::<Address>()?;
     
     // Create calldata for the consumeGas function
@@ -76,6 +100,16 @@ async fn main() -> Result<()> {
     println!("Contract Address: {}", contract_address);
     println!("PBH Entry Point: {}", pbh_entry_point);
     println!("Iterations: {}", iterations);
+    
+    // Print gas fee information if provided
+    if let Some(gas_fee) = args.gas_fee {
+        println!("Gas Fee: {} Gwei", gas_fee);
+    }
+    
+    if let Some(priority_gas_fee) = args.priority_gas_fee {
+        println!("Priority Gas Fee: {} Gwei", priority_gas_fee);
+    }
+    
     println!();
     println!("In a real implementation, this would:");
     println!("1. Send a direct transaction to the contract");
