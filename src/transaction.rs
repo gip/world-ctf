@@ -1,6 +1,6 @@
 use alloy_consensus::TxEnvelope;
 use alloy_network::{EthereumWallet, TransactionBuilder};
-use alloy_primitives::{Address, Bytes, U256};
+use alloy_primitives::Address;
 use alloy_rpc_types_eth::{TransactionInput, TransactionRequest};
 use alloy_signer_local::PrivateKeySigner;
 use eyre::Result;
@@ -33,12 +33,6 @@ impl GasTestTransactionBuilder {
 
     pub async fn build(self, signer: PrivateKeySigner) -> Result<TxEnvelope> {
         Ok(self.tx.build::<EthereumWallet>(&signer.into()).await?)
-    }
-
-    /// Sets the gas limit for the transaction.
-    pub fn gas_limit(self, gas_limit: u64) -> Self {
-        let tx = self.tx.gas_limit(gas_limit);
-        Self { tx }
     }
 
     /// Sets the recipient address for the transaction.
