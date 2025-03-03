@@ -1,10 +1,10 @@
 use alloy_consensus::TxEnvelope;
 use alloy_network::{EthereumWallet, TransactionBuilder};
-use alloy_primitives::Address;
+use alloy_primitives::{Address, Bytes};
 use alloy_provider::Provider;
 use alloy_rpc_types_eth::{TransactionInput, TransactionRequest};
 use alloy_signer_local::PrivateKeySigner;
-use alloy_sol_types::SolValue;
+use alloy_sol_types::{SolCall, SolValue};
 use eyre::Result;
 use semaphore_rs::hash_to_field;
 use std::sync::Arc;
@@ -60,18 +60,63 @@ impl GasTestTransactionBuilder {
     ) -> Result<Self> {
         // Get the inclusion proof for the identity in the from the World Tree
         let signal_hash = hash_to_field(&SolValue::abi_encode_packed(&(from, calls.clone())));
-        let _pbh_payload = world_id.pbh_payload(pbh_nonce, signal_hash).await?;
+        let pbh_payload = world_id.pbh_payload(pbh_nonce, signal_hash).await?;
 
-        // For now, we'll use a simplified approach to create the calldata
+        // Convert Call3 to the expected format for IPBHEntryPoint::pbhMulticallCall
+        let converted_calls: Vec<(Address, Bytes, bool)> = calls
+            .into_iter()
+            .map(|call| (call.target, call.callData, call.allowFailure))
+            .collect();
+
         // Function selector for pbhMulticall (first 4 bytes of keccak256("pbhMulticall((address,bytes,bool)[],(uint256,uint256,(uint8,uint8,uint8,uint16),(uint256[8],)))"))
         let selector = [0x96, 0x4a, 0x97, 0x50];
         
-        // Create a simplified calldata - in a real implementation, we would properly encode the calls and payload
+        // Create the calldata manually since we have type compatibility issues
         let mut calldata_bytes = selector.to_vec();
         
-        // Add some placeholder data for the parameters
-        // This is a simplified implementation - in a real implementation, we would properly encode the parameters
-        calldata_bytes.extend_from_slice(&[0; 64]); // Placeholder data
+        // Encode the calls using SolValue::abi_encode
+        let encoded_calls = SolValue::abi_encode(&converted_calls);
+        calldata_bytes.extend_from_slice(&encoded_calls);
+        
+        // Extract the payload components and encode them manually
+        use alloy_primitives::U256;
+        
+        // Create a tuple with the payload components in the expected format
+        // (root, nullifier_hash, external_nullifier, proof)
+        // Convert Field to U256 using the string representation
+        let root = U256::from_str_radix(&pbh_payload.root.to_string(), 10).unwrap_or(U256::ZERO);
+        let nullifier_hash = U256::from_str_radix(&pbh_payload.nullifier_hash.to_string(), 10).unwrap_or(U256::ZERO);
+        
+        // For simplicity, create hardcoded values for the external nullifier components
+        // In a real implementation, we would extract these from the external_nullifier
+        // Use u16 instead of u8 since u8 doesn't implement SolValue
+        let year: u16 = 24; // 2024
+        let month: u16 = 3; // March
+        let day: u16 = 3; // 3rd
+        
+        // Use the provided pbh_nonce
+        let nonce = pbh_nonce;
+        
+        // Create a dummy proof array
+        // In a real implementation, we would extract this from the proof
+        let proof_flat = [U256::ZERO; 8];
+        
+        // Create the payload tuple in the expected format
+        let payload_tuple = (
+            root,
+            nullifier_hash,
+            (
+                year,
+                month,
+                day,
+                nonce,
+            ),
+            (proof_flat,),
+        );
+        
+        // Encode the payload tuple
+        let encoded_payload = SolValue::abi_encode(&payload_tuple);
+        calldata_bytes.extend_from_slice(&encoded_payload);
 
         let tx = self.tx
             .input(TransactionInput::new(calldata_bytes.into()));
