@@ -1,11 +1,13 @@
 use alloy_consensus::TxEnvelope;
 use alloy_network::{EthereumWallet, TransactionBuilder};
 use alloy_primitives::Address;
+use alloy_provider::Provider;
 use alloy_rpc_types_eth::{TransactionInput, TransactionRequest};
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{SolCall, SolValue};
 use eyre::Result;
 use semaphore_rs::hash_to_field;
+use std::sync::Arc;
 use world_chain_builder_test_utils::bindings::IMulticall3::Call3;
 
 use crate::world_id::WorldID;
@@ -14,13 +16,23 @@ use world_chain_builder_test_utils::bindings::IPBHEntryPoint;
 // PBH Entry Point address
 pub static PBH_ENTRY_POINT: Address = Address::ZERO;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct GasTestTransactionBuilder {
     pub tx: TransactionRequest,
+    pub provider: Option<Arc<dyn Provider>>,
+}
+
+impl std::fmt::Debug for GasTestTransactionBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GasTestTransactionBuilder")
+            .field("tx", &self.tx)
+            .field("provider", &format!("<provider>"))
+            .finish()
+    }
 }
 
 impl GasTestTransactionBuilder {
-    pub fn new(gas_fee: Option<f64>, priority_gas_fee: Option<f64>) -> Self {
+    pub fn new(gas_fee: Option<f64>, priority_gas_fee: Option<f64>, _rpc_address: Option<String>) -> Self {
         let mut tx = TransactionRequest::default()
             .gas_limit(130000);
         
@@ -37,7 +49,7 @@ impl GasTestTransactionBuilder {
             tx = tx.max_priority_fee_per_gas(1e8 as u128);
         }
         
-        GasTestTransactionBuilder { tx }
+        GasTestTransactionBuilder { tx, provider: None }
     }
 
     pub async fn with_pbh_multicall(
@@ -61,23 +73,26 @@ impl GasTestTransactionBuilder {
             .to(PBH_ENTRY_POINT)
             .input(TransactionInput::new(calldata.abi_encode().into()));
         
-        Ok(Self { tx })
+        Ok(Self { tx, provider: self.provider })
     }
 
     pub async fn build(self, signer: PrivateKeySigner) -> Result<TxEnvelope> {
-        Ok(self.tx.build::<EthereumWallet>(&signer.into()).await?)
+        let wallet: EthereumWallet = signer.into();
+        
+        // Build the transaction without a provider
+        Ok(self.tx.build(&wallet).await?)
     }
 
     /// Sets the recipient address for the transaction.
     pub fn to(self, to: Address) -> Self {
         let tx = self.tx.to(to);
-        Self { tx }
+        Self { tx, provider: self.provider }
     }
 
     /// Sets the input data for the transaction.
     pub fn input(self, input: TransactionInput) -> Self {
         let tx = self.tx.input(input);
-        Self { tx }
+        Self { tx, provider: self.provider }
     }
 }
 

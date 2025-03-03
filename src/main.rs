@@ -1,12 +1,17 @@
-use alloy_primitives::{Address, Bytes, U256};
+use alloy_consensus::Transaction;
+use alloy_network::{Network, eip2718::Encodable2718};
+use alloy_primitives::{Address, Bytes, TxHash, U256};
+use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types_eth::TransactionInput;
 use alloy_signer_local::PrivateKeySigner;
 use clap::Parser;
 use eyre::Result;
+use reqwest::Url;
 use serde::Deserialize;
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 mod transaction;
 mod world_id;
@@ -20,6 +25,7 @@ use world_id::WorldID;
 struct Config {
     contract_address: String,
     world_id: String,
+    rpc_address: String,
 }
 
 // Command line arguments
@@ -30,9 +36,9 @@ struct Args {
     #[clap(long)]
     iterations: u64,
     
-    /// RPC provider URI
-    #[clap(long, default_value = "https://worldchain-sepolia.infura.io/v3/your-api-key")]
-    provider_uri: String,
+    /// RPC provider URI (overrides config file)
+    #[clap(long)]
+    provider_uri: Option<String>,
     
     /// PBH Entry Point contract address
     #[clap(long, default_value = "0x6e37bAB9d23bd8Bdb42b773C58ae43C6De43A590")]
@@ -142,6 +148,20 @@ async fn main() -> Result<()> {
     println!();
     println!("Sending transaction to the contract...");
     
+    // Determine which RPC address to use (command line takes precedence over config)
+    let rpc_address = args.provider_uri.or(Some(config.rpc_address.clone()));
+    
+    // Create a provider with the RPC address if provided
+    let provider = if let Some(rpc_uri) = rpc_address.clone() {
+        println!("Using RPC address: {}", rpc_uri);
+        let provider = ProviderBuilder::new()
+            .on_http(rpc_uri.parse::<Url>()?);
+        Some(Arc::new(provider))
+    } else {
+        println!("No RPC address provided, transaction will not be sent");
+        None
+    };
+    
     // Create and send the transaction
     let tx = if args.use_pbh {
         // Create a WorldID from the world_id in the config
@@ -151,21 +171,30 @@ async fn main() -> Result<()> {
         let calls = consume_gas_multicall(contract_address, args.iterations);
         
         // Create and send a PBH transaction
-        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee)
+        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None)
             .with_pbh_multicall(&world_id, args.pbh_nonce, signer.address(), calls)
             .await?
             .build(signer)
             .await?
     } else {
         // Create and send a direct transaction
-        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee)
+        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None)
             .to(contract_address)
             .input(TransactionInput::new(calldata))
             .build(signer)
             .await?
     };
     
-    println!("Transaction sent: {:?}", tx);
+    // Send the transaction using the provider if available
+    if let Some(provider) = provider {
+        // Send the transaction using the provider
+        let pending_tx = provider.send_raw_transaction(&tx.encoded_2718()).await?;
+        println!("Transaction sent: {:?}", pending_tx.tx_hash());
+    } else {
+        // Just print the transaction details if no provider is available
+        println!("Transaction built but not sent (no provider available):");
+        println!("  Transaction: {:?}", tx);
+    }
     
     Ok(())
 }
