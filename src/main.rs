@@ -1,4 +1,5 @@
 use alloy_primitives::{Address, Bytes, U256};
+use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types_eth::TransactionInput;
 use alloy_signer_local::PrivateKeySigner;
 use clap::Parser;
@@ -142,6 +143,14 @@ async fn main() -> Result<()> {
     println!();
     println!("Sending transaction to the contract...");
     
+    // Create a provider to interact with the blockchain
+    let provider_url = reqwest::Url::parse(&args.provider_uri)?;
+    let provider = ProviderBuilder::new().on_http(provider_url);
+    
+    // Get the current nonce for the signer's address
+    let nonce = provider.get_transaction_count(signer.address()).await?;
+    println!("Using nonce: {}", nonce);
+    
     // Create and send the transaction
     let tx = if args.use_pbh {
         // Create a WorldID from the world_id in the config
@@ -154,6 +163,7 @@ async fn main() -> Result<()> {
         GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee)
             .with_pbh_multicall(&world_id, args.pbh_nonce, signer.address(), calls)
             .await?
+            .nonce(nonce) // Set the nonce
             .build(signer)
             .await?
     } else {
@@ -161,6 +171,7 @@ async fn main() -> Result<()> {
         GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee)
             .to(contract_address)
             .input(TransactionInput::new(calldata))
+            .nonce(nonce) // Set the nonce
             .build(signer)
             .await?
     };

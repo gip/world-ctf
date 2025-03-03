@@ -52,7 +52,7 @@ impl WorldID {
     pub fn pbh_payload(
         &self,
         pbh_nonce: u16,
-        signal_hash: Field,
+        _signal_hash: Field,
     ) -> Result<PBHPayload> {
         let (external_nullifier, _external_nullifier_hash, nullifier_hash) =
             self.pbh_ext_nullifier(pbh_nonce);

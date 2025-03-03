@@ -79,6 +79,12 @@ impl GasTestTransactionBuilder {
         let tx = self.tx.input(input);
         Self { tx }
     }
+    
+    /// Sets the nonce for the transaction.
+    pub fn nonce(self, nonce: u64) -> Self {
+        let tx = self.tx.nonce(nonce);
+        Self { tx }
+    }
 }
 
 /// Creates a multicall call for the gas consumption function
