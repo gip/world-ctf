@@ -1,10 +1,19 @@
 use alloy_primitives::{Address, Bytes, U256};
+use alloy_rpc_types_eth::TransactionInput;
+use alloy_signer_local::PrivateKeySigner;
 use clap::Parser;
 use eyre::Result;
 use serde::Deserialize;
 use std::env;
 use std::fs;
 use std::path::Path;
+
+mod transaction;
+mod world_id;
+mod bindings;
+
+use transaction::{GasTestTransactionBuilder, consume_gas_multicall};
+use world_id::WorldID;
 
 // Configuration from TOML file
 #[derive(Deserialize, Debug)]
@@ -40,6 +49,14 @@ struct Args {
     /// Path to configuration file
     #[clap(long, default_value = "config.toml")]
     config_file: String,
+    
+    /// Use PBH transaction instead of direct transaction
+    #[clap(long)]
+    use_pbh: bool,
+    
+    /// PBH nonce (only used with --use-pbh)
+    #[clap(long, default_value = "0")]
+    pbh_nonce: u16,
 }
 
 // Function to create calldata for the consumeGas function
@@ -88,12 +105,16 @@ async fn main() -> Result<()> {
     let private_key = env::var("PRIVATE_KEY")
         .map_err(|_| eyre::eyre!("PRIVATE_KEY environment variable not set"))?;
     
+    // Parse the private key
+    let signer = private_key.parse::<PrivateKeySigner>()?;
+    
     // Convert string addresses to Address type
     let contract_address = config.contract_address.parse::<Address>()?;
     let pbh_entry_point = args.pbh_entry_point.parse::<Address>()?;
     
     // Create calldata for the consumeGas function
     let iterations = U256::from(args.iterations);
+    let calldata = consume_gas_calldata(contract_address, iterations);
     
     println!("Gas Test Application");
     println!("-------------------");
@@ -110,12 +131,41 @@ async fn main() -> Result<()> {
         println!("Priority Gas Fee: {} Gwei", priority_gas_fee);
     }
     
+    // Print transaction type
+    if args.use_pbh {
+        println!("Transaction Type: PBH");
+        println!("PBH Nonce: {}", args.pbh_nonce);
+    } else {
+        println!("Transaction Type: Direct");
+    }
+    
     println!();
-    println!("In a real implementation, this would:");
-    println!("1. Send a direct transaction to the contract");
-    println!("2. Send a PBH transaction through the PBH Entry Point");
-    println!();
-    println!("For now, this is a placeholder that successfully builds.");
+    println!("Sending transaction to the contract...");
+    
+    // Create and send the transaction
+    let tx = if args.use_pbh {
+        // Create a WorldID from the world_id in the config
+        let world_id = WorldID::new(&config.world_id)?;
+        
+        // Create a multicall for the consumeGas function
+        let calls = consume_gas_multicall(contract_address, args.iterations);
+        
+        // Create and send a PBH transaction
+        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee)
+            .with_pbh_multicall(&world_id, args.pbh_nonce, signer.address(), calls)
+            .await?
+            .build(signer)
+            .await?
+    } else {
+        // Create and send a direct transaction
+        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee)
+            .to(contract_address)
+            .input(TransactionInput::new(calldata))
+            .build(signer)
+            .await?
+    };
+    
+    println!("Transaction sent: {:?}", tx);
     
     Ok(())
 }
