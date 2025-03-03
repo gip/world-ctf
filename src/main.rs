@@ -171,14 +171,14 @@ async fn main() -> Result<()> {
         let calls = consume_gas_multicall(contract_address, args.iterations);
         
         // Create and send a PBH transaction
-        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, rpc_address)
+        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None)
             .with_pbh_multicall(&world_id, args.pbh_nonce, signer.address(), calls)
             .await?
             .build(signer)
             .await?
     } else {
         // Create and send a direct transaction
-        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, rpc_address)
+        GasTestTransactionBuilder::new(args.gas_fee, args.priority_gas_fee, None)
             .to(contract_address)
             .input(TransactionInput::new(calldata))
             .build(signer)
